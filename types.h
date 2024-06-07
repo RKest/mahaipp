@@ -109,7 +109,6 @@ using Yaku = std::variant<Han<1>, Han<2>, Han<3>, Han<6>, Mangan, Yakuman, Doubl
 inline auto is_same_suit(Tile t1, Tile t2) -> bool { return (t1 & tile_suit_mask) == (t2 & tile_suit_mask); }
 
 inline auto is_bamboo(Tile t) -> bool { return (t & tile_suit_mask) == Bamboo1; }
-inline auto is_character(Tile t) -> bool { return (t & tile_suit_mask) == Character1; }
 inline auto is_dots(Tile t) -> bool { return (t & tile_suit_mask) == Dots1; }
 inline auto is_dragon(Tile t) -> bool { return t >= DragonWhite && t <= DragonRed; }
 inline auto is_wind(Tile t) -> bool { return t >= WindEast && t <= WindNorth; }

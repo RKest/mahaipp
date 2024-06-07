@@ -25,7 +25,7 @@ REWARD_WIN = 30
 REWARD_FREE_TILE_DIFF = 3
 REWARD_HAN_DIFF = 10
 
-log_dir = "log5"
+log_dir = "log6"
 
 class Mahjong(gym.Env):
     def __init__(self):
@@ -36,8 +36,9 @@ class Mahjong(gym.Env):
         self.losses = 0
         self.draws = 0
         self.latest_result = pymahai.GameResult.Nothing
-        self.action_space = gym.spaces.Discrete(n=14)  # Fourteen possible tiles to be discarded
         self.render_mode = "human"
+
+        self.action_space = gym.spaces.Discrete(n=14)  # Fourteen possible tiles to be discarded
         self.observation_space = gym.spaces.Dict(spaces={
             "discard": gym.spaces.Box(low=0, high=255, shape=(87,), dtype=np.uint8),  # Largest possible discard pile
             "hand": gym.spaces.Box(low=0, high=255, shape=(14,), dtype=np.uint8)  # Tile values in hand
@@ -56,8 +57,8 @@ class Mahjong(gym.Env):
     def step(self, action):
         s = self.game.step(action)
         self.latest_result = s.result
-        reward = 0
         done = s.result != pymahai.GameResult.Nothing
+        reward = 0
         if s.result == pymahai.GameResult.Win:
             reward += REWARD_WIN
             self.wins += 1
@@ -85,11 +86,11 @@ class Mahjong(gym.Env):
 
 
 def learning_rate_schedule(progress_remaining):
-    start_rate = 0.0001  # 0.0003
+    start_rate = 0.0001
     return start_rate * progress_remaining
 
 PPO_model_args = {
-    "learning_rate": learning_rate_schedule,  # decreasing learning rate #0.0003 #can be set to constant
+    "learning_rate": learning_rate_schedule,
     "gamma": 0.99,
     # 0.99, discount factor for futurer rewards, between 0 (only immediate reward matters) and 1 (future reward equivalent to immediate),
     "verbose": 0,  # change to 1 to get more info on training steps
@@ -108,16 +109,15 @@ def train():
     eval_callback = EvalCallback(env, best_model_save_path=F'{log_dir}/',
                                  log_path=F'{log_dir}/', eval_freq=5000,
                                  deterministic=False, render=False)
-    env = Mahjong()
     check_env(env, warn=True)
 
-    max_total_step_num = 1e6
 
     starttime = time.time()
     model = PPO('MultiInputPolicy', env, **PPO_model_args)
     # Load previous best model parameters, we start from that
     if os.path.exists(F"{log_dir}/best_model.zip"):
         model.set_parameters(F"{log_dir}/best_model.zip")
+    max_total_step_num = 1e6
     model.learn(max_total_step_num, callback=eval_callback)
     dt = time.time() - starttime
     print("Calculation took %g hr %g min %g s" % (dt // 3600, (dt // 60) % 60, dt % 60))
@@ -132,6 +132,19 @@ def test():
     print("Best model's reward: %3.3g +/- %3.3g"%(mean_reward,std_reward))
     env.record()
 
+from io import StringIO
+import sys
+
+class Capturing(list):
+    def __enter__(self):
+        self._stdout = sys.stdout
+        sys.stdout = self._stringio = StringIO()
+        return self
+    def __exit__(self, *args):
+        self.extend(self._stringio.getvalue())
+        del self._stringio    # free up some memory
+        sys.stdout = self._stdout
+
 
 def display():
     env = Mahjong()
@@ -141,7 +154,10 @@ def display():
     obs = vec_env.reset()
 
     while True:
-        vec_env.render()
+        with Capturing() as out:
+            vec_env.render()
+            print(out)
+        time.sleep(0.05)
         action, _ = model.predict(observation=obs, deterministic=False)
         obs, _, done, _ = vec_env.step(action)
         # input()
