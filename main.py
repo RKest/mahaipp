@@ -28,6 +28,9 @@ from stable_baselines3.common.monitor import load_results
 from stable_baselines3.common.evaluation import evaluate_policy
 import matplotlib.pyplot as plt
 
+from websockets.asyncio.server import serve
+import asyncio
+
 import numpy as np
 
 REWARD_LOSS = -30
@@ -143,24 +146,39 @@ def test():
     print("Best model's reward: %3.3g +/- %3.3g" % (mean_reward, std_reward))
     env.record()
 
+import threading
 
-from io import StringIO
-import sys
-
-
-class Capturing(list):
+class OutputGrabber:
     def __enter__(self):
-        self._stdout = sys.stdout
-        sys.stdout = self._stringio = StringIO()
+        self.stdout = sys.stdout
+        self.stdout_fileno = self.stdout.fileno()
+        self.stdout_save = os.dup(self.stdout_fileno)
+        self.stdout_pipe = os.pipe()
+        os.dup2(self.stdout_pipe[1], self.stdout_fileno)
+        os.close(self.stdout_pipe[1])
+
         return self
 
-    def __exit__(self, *args):
-        self.extend(self._stringio.getvalue())
-        del self._stringio  # free up some memory
-        sys.stdout = self._stdout
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stdout.flush()
+        self.captured_stdout = ''
+        def drain_pipe():
+            while True:
+                data = os.read(self.stdout_pipe[0], 1024).decode()
+                if not data:
+                    break
+                self.captured_stdout += data
+
+        self.t = threading.Thread(target=drain_pipe)
+        self.t.start()
+        os.close(self.stdout_fileno)
+        self.t.join()
+        os.close(self.stdout_pipe[0])
+        os.dup2(self.stdout_save, self.stdout_fileno)
+        os.close(self.stdout_save)
 
 
-def display():
+async def display(ws):
     env = Mahjong()
     model = PPO('MultiInputPolicy', env, **PPO_model_args)
     model.set_parameters(F"{log_dir}/best_model.zip")
@@ -168,19 +186,29 @@ def display():
     obs = vec_env.reset()
 
     while True:
-        with Capturing() as out:
-            vec_env.render()
-            print(out)
-        time.sleep(0.05)
+        state = ""
         action, _ = model.predict(observation=obs, deterministic=False)
-        obs, _, done, _ = vec_env.step(action)
-        # input()
+        og = OutputGrabber()
+        with og:
+            obs, _, done, _ = vec_env.step(action)
+        if not done:
+            with og:
+                vec_env.render()
+        state += og.captured_stdout
         if done:
             if env.latest_result != pymahai.GameResult.Win:
                 vec_env.reset()
             else:
-                print("WIN")
+                state += "\nWIN\n"
+                await ws.send(state.replace("\n", "<br>"))
                 break
+        await ws.send(state.replace("\n", "<br>"))
+        await asyncio.sleep(0.05)
+
+
+async def display_async():
+    async with serve(display, "localhost", 5678):
+        await asyncio.get_running_loop().create_future()  # run forever
 
 
 def plot():
@@ -239,4 +267,4 @@ if __name__ == "__main__":
         case "plot":
             plot()
         case "play":
-            display()
+            asyncio.run(display_async())

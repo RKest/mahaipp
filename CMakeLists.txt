@@ -4,8 +4,6 @@ project(mahai)
 set(CMAKE_CXX_STANDARD 23)
 
 find_package(pybind11 REQUIRED)
-add_executable(mahai main.cpp)
-target_link_libraries(mahai pybind11::embed)
 
 include(FetchContent)
 FetchContent_Declare(

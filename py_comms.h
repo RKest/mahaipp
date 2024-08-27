@@ -150,7 +150,6 @@ namespace py {
     }
 
     inline void Game::render() {
-        std::ignore = system("clear");
         for (int i = 1; i < N_Players; ++i) {
             std::cout << "Discard " << i << ": " << players[i].tiles_discard << '\n';
         }

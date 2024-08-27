@@ -1,0 +1,30 @@
+<html>
+	<head>
+		<style>
+			@font-face {
+				font-family: "Mahjong Colored";
+				src: url("Mah.otf") format("opentype");
+				font-variation-settings: 'COLR' 1;
+			}
+			* {
+				font-family: "Mahjong Colored";
+				-webkit-font-feature-settings: 'CPAL' 0;
+				font-feature-settings: 'COLR' 1;
+			}
+		</style>
+		<script>
+			window.addEventListener("DOMContentLoaded", () => {
+			  const board = document.getElementById("board");
+			  const ws = new WebSocket("ws://localhost:5678/");
+			  ws.onmessage = ({ data }) => {
+			    board.innerHTML = data;
+			  };
+			});
+		</script>
+		<meta charset="utf-8">
+		<title>Home</title>
+	</head>
+	<body>
+		<p id="board"></p>
+	</body>
+</html>
